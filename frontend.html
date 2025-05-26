@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HomeHarmony - Gestión de Tareas Domésticas</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <style id="app-style">
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f9fafb;
+    }
+    
+    .auth-container {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      min-height: 100vh;
+    }
+    
+    .auth-card {
+      backdrop-filter: blur(10px);
+      background-color: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      border-radius: 16px;
+    }
+    
+    .app-container {
+      display: none;
+      min-height: 100vh;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .task-item {
+      border-left: 4px solid #6366f1;
+      transition: all 0.3s ease;
+    }
+    
+    .task-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .task-item.completed {
+      border-left-color: #10b981;
+      opacity: 0.7;
+    }
+    
+    .task-item.in-progress {
+      border-left-color: #f59e0b;
+    }
+    
+    .message-bubble {
+      max-width: 80%;
+      border-radius: 18px;
+    }
+    
+    .message-bubble.sent {
+      background-color: #6366f1;
+      color: white;
+      border-bottom-right-radius: 4px;
+      margin-left: auto;
+    }
+    
+    .message-bubble.received {
+      background-color: #e5e7eb;
+      color: #1f2937;
+      border-bottom-left-radius: 4px;
+    }
+    
+    .household-card {
+      transition: all 0.3s ease;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    
+    .household-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+    }
+    
+    .calendar-day {
+      height: 80px;
+      transition: all 0.2s ease;
+    }
+    
+    .calendar-day:hover:not(.empty) {
+      background-color: #f3f4f6;
+      cursor: pointer;
+    }
+    
+    .calendar-day.has-tasks {
+      position: relative;
+    }
+    
+    .calendar-day.has-tasks::after {
+      content: '';
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #6366f1;
+    }
+    
+    .calendar-day.today {
+      background-color: #ede9fe;
+      font-weight: bold;
+      color: #6366f1;
+    }
+    
+    .calendar-day.empty {
+      background-color: #f9fafb;
+      color: #d1d5db;
+    }
+    
+    #profileDropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      width: 200px;
+      z-index: 50;
+    }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+    
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    
+    .loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(255, 255, 255, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      display: none;
+    }
+    
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #6366f1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading Spinner -->
+  <div class="loading" id="loadingSpinner">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Toast Message -->
+  <div id="toast" class="toast bg-green-500 text-white"></div>
+
+  <!-- Authentication Screen -->
+  <div class="auth-container flex items-center justify-center p-4" id="authScreen">
+    <div class="auth-card w-full max-w-md p-8">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-indigo-600 mb-2">HomeHarmony</h1>
+        <p class="text-gray-600">Organiza tu hogar compartido fácilmente</p>
+      </div>
+      
+      <div class="mb-6">
+        <div class="flex border-b border-gray-300">
+          <button id="loginTabBtn" class="py-2 px-4 font-medium text-indigo-600 border-b-2 border-indigo-600">Iniciar Sesión</button>
+          <button id="registerTabBtn" class="py-2 px-4 font-medium text-gray-500">Registrarse</button>
+        </div>
+      </div>
+      
+      <!-- Login Form -->
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label for="loginEmail" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+          <input type="email" id="loginEmail" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="loginPassword" class="block text-sm font-medium text-gray-700">Contraseña</label>
+            <a href="javascript:void(0)" id="forgotPasswordLink" class="text-sm text-indigo-600 hover:underline">¿Olvidaste tu contraseña?</a>
+          </div>
+          <input type="password" id="loginPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <button type="submit" class="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-200">Iniciar Sesión</button>
+        </div>
+      </form>
+      
+      <!-- Register Form -->
+      <form id="registerForm" class="space-y-4" style="display: none;">
+        <div>
+          <label for="registerName" class="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
+          <input type="text" id="registerName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="registerEmail" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+          <input type="email" id="registerEmail" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="registerPassword" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+          <input type="password" id="registerPassword" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="registerPasswordConfirm" class="block text-sm font-medium text-gray-700 mb-1">Confirmar contraseña</label>
+          <input type="password" id="registerPasswordConfirm" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <button type="submit" class="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-200">Registrarse</button>
+        </div>
+      </form>
+      
+      <!-- Forgot Password Form -->
+      <form id="forgotPasswordForm" class="space-y-4" style="display: none;">
+        <div class="mb-4">
+          <h2 class="text-xl font-semibold text-gray-800 mb-2">Recuperar contraseña</h2>
+          <p class="text-gray-600 text-sm">Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.</p>
+        </div>
+        <div>
+          <label for="forgotEmail" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+          <input type="email" id="forgotEmail" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <button type="submit" class="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-200">Enviar enlace</button>
+        </div>
+        <div>
+          <button type="button" id="backToLoginBtn" class="w-full py-2 px-4 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-200">Volver al inicio de sesión</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Application -->
+  <div class="app-container" id="appScreen">
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+          <div class="flex">
+            <div class="flex-shrink-0 flex items-center">
+              <h1 class="text-2xl font-bold text-indigo-600">HomeHarmony</h1>
+            </div>
+          </div>
+          <div class="flex items-center">
+            <div class="ml-3 relative">
+              <div>
+                <button id="profileButton" class="flex text-sm rounded-full focus:outline-none">
+                  <span class="sr-only">Abrir menú de usuario</span>
+                  <img class="h-10 w-10 rounded-full border-2 border-indigo-200" src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png" alt="Avatar">
+                </button>
+              </div>
+              <div id="profileDropdown" class="bg-white rounded-md shadow-lg py-1">
+                <a href="javascript:void(0)" id="profileLink" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Mi perfil</a>
+                <a href="javascript:void(0)" id="settingsLink" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Configuración</a>
+                <a href="javascript:void(0)" id="logoutBtn" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cerrar sesión</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Households List Screen -->
+    <div id="householdsScreen" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Mis Hogares</h2>
+        <button id="createHouseholdBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center">
+          <i class="fas fa-plus mr-2"></i> Crear Hogar
+        </button>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="householdsList">
+        <!-- Household cards will be inserted here -->
+      </div>
+    </div>
+
+    <!-- Household Detail Screen -->
+    <div id="householdDetailScreen" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" style="display: none;">
+      <div class="mb-6">
+        <button id="backToHouseholdsBtn" class="text-indigo-600 hover:text-indigo-800 flex items-center">
+          <i class="fas fa-arrow-left mr-2"></i> Volver a mis hogares
+        </button>
+      </div>
+      
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800" id="householdDetailTitle">Nombre del Hogar</h2>
+      </div>
+      
+      <!-- Tab Navigation -->
+      <div class="border-b border-gray-200 mb-6">
+        <nav class="flex -mb-px">
+          <button class="tab-button text-indigo-600 border-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm" data-tab="tasks">
+            <i class="fas fa-tasks mr-2"></i> Tareas
+          </button>
+          <button class="tab-button text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 border-transparent font-medium text-sm ml-8" data-tab="calendar">
+            <i class="far fa-calendar-alt mr-2"></i> Calendario
+          </button>
+          <button class="tab-button text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 border-transparent font-medium text-sm ml-8" data-tab="chat">
+            <i class="far fa-comment-alt mr-2"></i> Chat
+          </button>
+          <button class="tab-button text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 border-transparent font-medium text-sm ml-8" data-tab="members">
+            <i class="fas fa-users mr-2"></i> Miembros
+          </button>
+        </nav>
+      </div>
+      
+      <!-- Tasks Tab Content -->
+      <div id="tasksTab" class="tab-content active">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <select id="taskFilterSelect" class="bg-white border border-gray-300 rounded-md px-3 py-2 text-sm">
+              <option value="all">Todas las tareas</option>
+              <option value="pending">Pendientes</option>
+              <option value="in-progress">En progreso</option>
+              <option value="completed">Completadas</option>
+            </select>
+          </div>
+          <button id="createTaskBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center">
+            <i class="fas fa-plus mr-2"></i> Nueva tarea
+          </button>
+        </div>
+        
+        <div id="tasksList" class="space-y-4">
+          <!-- Tasks will be inserted here -->
+        </div>
+      </div>
+      
+      <!-- Calendar Tab Content -->
+      <div id="calendarTab" class="tab-content">
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+          <div class="flex items-center justify-between py-4 px-6 bg-gray-50">
+            <button id="prevMonthBtn" class="p-2 rounded-full hover:bg-gray-200">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <h3 id="calendarMonthYear" class="text-lg font-semibold text-gray-800">Junio 2025</h3>
+            <button id="nextMonthBtn" class="p-2 rounded-full hover:bg-gray-200">
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-7 gap-px bg-gray-200">
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Lun</div>
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Mar</div>
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Mié</div>
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Jue</div>
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Vie</div>
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Sáb</div>
+            <div class="bg-gray-50 text-center py-2 text-sm font-semibold text-gray-700">Dom</div>
+          </div>
+          
+          <div id="calendarDays" class="grid grid-cols-7 gap-px bg-gray-200">
+            <!-- Calendar days will be inserted here -->
+          </div>
+        </div>
+        
+        <div id="dayTasksContainer" class="mt-6 bg-white rounded-lg shadow p-6" style="display: none;">
+          <h3 id="dayTasksTitle" class="text-lg font-semibold text-gray-800 mb-4">Tareas para el 15 de Junio</h3>
+          <div id="dayTasksList" class="space-y-4">
+            <!-- Day tasks will be inserted here -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- Chat Tab Content -->
+      <div id="chatTab" class="tab-content">
+        <div class="bg-white rounded-lg shadow overflow-hidden flex flex-col h-[600px]">
+          <div class="p-4 bg-gray-50 border-b">
+            <h3 class="text-lg font-semibold text-gray-800">Chat de grupo</h3>
+          </div>
+          
+          <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-4">
+            <!-- Chat messages will be inserted here -->
+          </div>
+          
+          <div class="p-4 border-t">
+            <form id="chatForm" class="flex">
+              <input type="text" id="chatInput" placeholder="Escribe un mensaje..." class="flex-1 px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-indigo-500 focus:border-indigo-500">
+              <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-r-lg hover:bg-indigo-700">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Members Tab Content -->
+      <div id="membersTab" class="tab-content">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-lg font-semibold text-gray-800">Miembros del hogar</h3>
+          <button id="inviteMemberBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center">
+            <i class="fas fa-user-plus mr-2"></i> Invitar miembro
+          </button>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+          <ul id="membersList" class="divide-y divide-gray-200">
+            <!-- Members will be inserted here -->
+          </ul>
+        </div>
+        
+        <div class="mt-8">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">Invitaciones pendientes</h3>
+          <div id="pendingInvitesList" class="space-y-4">
+            <!-- Pending invites will be inserted here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <!-- Create Household Modal -->
+  <div id="createHouseholdModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-800">Crear nuevo hogar</h3>
+        <button class="modal-close text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <form id="createHouseholdForm" class="space-y-4">
+        <div>
+          <label for="householdName" class="block text-sm font-medium text-gray-700 mb-1">Nombre del hogar</label>
+          <input type="text" id="householdName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="householdAddress" class="block text-sm font-medium text-gray-700 mb-1">Dirección (opcional)</label>
+          <input type="text" id="householdAddress" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div>
+          <label for="householdDescription" class="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
+          <textarea id="householdDescription" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+        </div>
+        <div class="flex justify-end pt-4">
+          <button type="button" class="modal-close px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 mr-2">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Crear hogar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create/Edit Task Modal -->
+  <div id="taskModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="taskModalTitle" class="text-xl font-semibold text-gray-800">Nueva tarea</h3>
+        <button class="modal-close text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <form id="taskForm" class="space-y-4">
+        <input type="hidden" id="taskId">
+        <div>
+          <label for="taskTitle" class="block text-sm font-medium text-gray-700 mb-1">Título de la tarea</label>
+          <input type="text" id="taskTitle" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="taskDescription" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+          <textarea id="taskDescription" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+        </div>
+        <div>
+          <label for="taskAssignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
+          <select id="taskAssignee" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+            <!-- Members will be inserted here -->
+          </select>
+        </div>
+        <div>
+          <label for="taskDueDate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de vencimiento</label>
+          <input type="text" id="taskDueDate" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Seleccionar fecha" required>
+        </div>
+        <div>
+          <label for="taskStatus" class="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+          <select id="taskStatus" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+            <option value="pending">Pendiente</option>
+            <option value="in-progress">En progreso</option>
+            <option value="completed">Completada</option>
+          </select>
+        </div>
+        <div class="flex justify-end pt-4">
+          <button type="button" class="modal-close px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 mr-2">Cancelar</button>
+          <button type="submit" id="taskSubmitBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Guardar tarea</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Invite Member Modal -->
+  <div id="inviteMemberModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-800">Invitar miembro</h3>
+        <button class="modal-close text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <form id="inviteMemberForm" class="space-y-4">
+        <div>
+          <label for="inviteEmail" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+          <input type="email" id="inviteEmail" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="inviteRole" class="block text-sm font-medium text-gray-700 mb-1">Rol</label>
+          <select id="inviteRole" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+            <option value="member">Miembro</option>
+            <option value="admin">Administrador</option>
+          </select>
+        </div>
+        <div>
+          <label for="inviteMessage" class="block text-sm font-medium text-gray-700 mb-1">Mensaje (opcional)</label>
+          <textarea id="inviteMessage" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" placeholder="Ej: ¡Hola! Te invito a unirte a nuestro hogar compartido."></textarea>
+        </div>
+        <div class="flex justify-end pt-4">
+          <button type="button" class="modal-close px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 mr-2">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Enviar invitación</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Profile Modal -->
+  <div id="profileModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-800">Mi perfil</h3>
+        <button class="modal-close text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <div class="flex flex-col items-center mb-6">
+        <img class="h-24 w-24 rounded-full border-2 border-indigo-200 mb-4" src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png" alt="Avatar">
+        <button class="text-sm text-indigo-600 hover:text-indigo-800">Cambiar foto</button>
+      </div>
+      
+      <form id="profileForm" class="space-y-4">
+        <div>
+          <label for="profileName" class="block text-sm font-medium text-gray-700 mb-1">Nombre completo</label>
+          <input type="text" id="profileName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="profileEmail" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+          <input type="email" id="profileEmail" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" required>
+        </div>
+        <div>
+          <label for="profilePhone" class="block text-sm font-medium text-gray-700 mb-1">Teléfono (opcional)</label>
+          <input type="tel" id="profilePhone" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+        <div class="flex justify-end pt-4">
+          <button type="button" class="modal-close px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 mr-2">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-xl font-semibold text-gray-800">Configuración</h3>
+        <button class="modal-close text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <form id="settingsForm" class="space-y-4">
+        <div>
+          <h4 class="font-medium text-gray-700 mb-2">Notificaciones</h4>
+          <div class="space-y-2">
+            <div class="flex items-center">
+              <input type="checkbox" id="notifyTasks" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+              <label for="notifyTasks" class="ml-2 block text-sm text-gray-700">Recordatorios de tareas</label>
+            </div>
+            <div class="flex items-center">
+              <input type="checkbox" id="notifyChat" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+              <label for="notifyChat" class="ml-2 block text-sm text-gray-700">Mensajes nuevos</label>
+            </div>
+            <div class="flex items-center">
+              <input type="checkbox" id="notifyInvites" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+              <label for="notifyInvites" class="ml-2 block text-sm text-gray-700">Invitaciones</label>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-medium text-gray-700 mb-2">Privacidad</h4>
+          <div class="space-y-2">
+            <div class="flex items-center">
+              <input type="checkbox" id="showEmail" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+              <label for="showEmail" class="ml-2 block text-sm text-gray-700">Mostrar mi correo a otros miembros</label>
+            </div>
+            <div class="flex items-center">
+              <input type="checkbox" id="showPhone" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+              <label for="showPhone" class="ml-2 block text-sm text-gray-700">Mostrar mi teléfono a otros miembros</label>
+            </div>
+          </div>
+        </div>
+        <div>
+          <h4 class="font-medium text-gray-700 mb-2">Idioma</h4>
+          <select id="language" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="es">Español</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <div class="flex justify-end pt-4">
+          <button type="button" class="modal-close px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 mr-2">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Guardar configuración</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+  <script id="app-script">
+    document.addEventListener('DOMContentLoaded', function() {
+      // Auth Screen Tabs
+      const loginTabBtn = document.getElementById('loginTabBtn');
+      const registerTabBtn = document.getElementById('registerTabBtn');
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+      const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+      const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+      const backToLoginBtn = document.getElementById('backToLoginBtn');
+      
+      // Main App Elements
+      const authScreen = document.getElementById('authScreen');
+      const appScreen = document.getElementById('appScreen');
+      const householdsScreen = document.getElementById('householdsScreen');
+      const householdDetailScreen = document.getElementById('householdDetailScreen');
+      const householdDetailTitle = document.getElementById('householdDetailTitle');
+      const backToHouseholdsBtn = document.getElementById('backToHouseholdsBtn');
+      
+      // Tab Navigation
+      const tabButtons = document.querySelectorAll('.tab-button');
+      const tabContents = document.querySelectorAll('.tab-content');
+      
+      // Modals
+      const createHouseholdModal = document.getElementById('createHouseholdModal');
+      const createHouseholdBtn = document.getElementById('createHouseholdBtn');
+      const createHouseholdForm = document.getElementById('createHouseholdForm');
+      const taskModal = document.getElementById('taskModal');
+      const createTaskBtn = document.getElementById('createTaskBtn');
+      const taskForm = document.getElementById('taskForm');
+      const inviteMemberModal = document.getElementById('inviteMemberModal');
+      const inviteMemberBtn = document.getElementById('inviteMemberBtn');
+      const inviteMemberForm = document.getElementById('inviteMemberForm');
+      const profileModal = document.getElementById('profileModal');
+      const settingsModal = document.getElementById('settingsModal');
+      
+      // Dropdowns
+      const profileButton = document.getElementById('profileButton');
+      const profileDropdown = document.getElementById('profileDropdown');
+      const profileLink = document.getElementById('profileLink');
+      const settingsLink = document.getElementById('settingsLink');
+      const logoutBtn = document.getElementById('logoutBtn');
+      
+      // Toast and Loading
+      const toast = document.getElementById('toast');
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      
+      // Initialize date picker
+      flatpickr("#taskDueDate", {
+        locale: "es",
+        dateFormat: "Y-m-d",
+        minDate: "today"
+      });
+      
+      // Auth Screen Tabs
+      loginTabBtn.addEventListener('click', function() {
+        loginTabBtn.classList.add('text-indigo-600', 'border-indigo-600');
+        loginTabBtn.classList.remove('text-gray-500');
+        registerTabBtn.classList.remove('text-indigo-600', 'border-indigo-600');
+        registerTabBtn.classList.add('text-gray-500');
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+        forgotPasswordForm.style.display = 'none';
+      });
+      
+      registerTabBtn.addEventListener('click', function() {
+        registerTabBtn.classList.add('text-indigo-600', 'border-indigo-600');
+        registerTabBtn.classList.remove('text-gray-500');
+        loginTabBtn.classList.remove('text-indigo-600', 'border-indigo-600');
+        loginTabBtn.classList.add('text-gray-500');
+        registerForm.style.display = 'block';
+        loginForm.style.display = 'none';
+        forgotPasswordForm.style.display = 'none';
+      });
+      
+      forgotPasswordLink.addEventListener('click', function() {
+        loginForm.style.display = 'none';
+        forgotPasswordForm.style.display = 'block';
+      });
+      
+      backToLoginBtn.addEventListener('click', function() {
+        forgotPasswordForm.style.display = 'none';
+        loginForm.style.display = 'block';
+      });
+      
+      // Login Form Submit
+      loginForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!email || !password) {
+          showToast('Por favor, completa todos los campos', 'error');
+          return;
+        }
+        
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          authScreen.style.display = 'none';
+          appScreen.style.display = 'block';
+          loadHouseholds();
+          showToast('Inicio de sesión exitoso', 'success');
+        }, 1000);
+      });
+      
+      // Register Form Submit
+      registerForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = document.getElementById('registerName').value;
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+        
+        if (!name || !email || !password || !passwordConfirm) {
+          showToast('Por favor, completa todos los campos', 'error');
+          return;
+        }
+        
+        if (password !== passwordConfirm) {
+          showToast('Las contraseñas no coinciden', 'error');
+          return;
+        }
+        
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          authScreen.style.display = 'none';
+          appScreen.style.display = 'block';
+          loadHouseholds();
+          showToast('Registro exitoso', 'success');
+        }, 1000);
+      });
+      
+      // Forgot Password Form Submit
+      forgotPasswordForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const email = document.getElementById('forgotEmail').value;
+        
+        if (!email) {
+          showToast('Por favor, ingresa tu correo electrónico', 'error');
+          return;
+        }
+        
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          forgotPasswordForm.style.display = 'none';
+          loginForm.style.display = 'block';
+          showToast('Se ha enviado un enlace a tu correo electrónico', 'success');
+        }, 1000);
+      });
+      
+      // Tab Navigation
+      tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+          // Remove active class from all tabs
+          tabButtons.forEach(btn => {
+            btn.classList.remove('text-indigo-600', 'border-indigo-600');
+            btn.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300', 'border-transparent');
+          });
+          
+          // Add active class to clicked tab
+          this.classList.add('text-indigo-600', 'border-indigo-600');
+          this.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300', 'border-transparent');
+          
+          // Hide all tab contents
+          tabContents.forEach(content => {
+            content.classList.remove('active');
+          });
+          
+          // Show corresponding tab content
+          const tabId = this.getAttribute('data-tab');
+          document.getElementById(tabId + 'Tab').classList.add('active');
+          
+          // Load tab-specific content
+          if (tabId === 'calendar') {
+            loadCalendar();
+          } else if (tabId === 'chat') {
+            loadChatMessages();
+          } else if (tabId === 'members') {
+            loadMembers();
+          }
+        });
+      });
+      
+      // Back to Households Button
+      backToHouseholdsBtn.addEventListener('click', function() {
+        householdDetailScreen.style.display = 'none';
+        householdsScreen.style.display = 'block';
+      });
+      
+      // Create Household Button
+      createHouseholdBtn.addEventListener('click', function() {
+        createHouseholdModal.style.display = 'flex';
+      });
+      
+      // Create Household Form Submit
+      createHouseholdForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = document.getElementById('householdName').value;
+        const address = document.getElementById('householdAddress').value;
+        const description = document.getElementById('householdDescription').value;
+        
+        if (!name) {
+          showToast('Por favor, ingresa un nombre para el hogar', 'error');
+          return;
+        }
+        
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          createHouseholdModal.style.display = 'none';
+          loadHouseholds();
+          showToast('Hogar creado exitosamente', 'success');
+        }, 1000);
+      });
+      
+      // Create Task Button
+      createTaskBtn.addEventListener('click', function() {
+        document.getElementById('taskModalTitle').textContent = 'Nueva tarea';
+        document.getElementById('taskId').value = '';
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('taskDescription').value = '';
+        document.getElementById('taskDueDate').value = '';
+        document.getElementById('taskStatus').value = 'pending';
+        
+        loadTaskAssignees();
+        taskModal.style.display = 'flex';
+      });
+      
+      // Task Form Submit
+      taskForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const title = document.getElementById('taskTitle').value;
+        const description = document.getElementById('taskDescription').value;
+        const assignee = document.getElementById('taskAssignee').value;
+        const dueDate = document.getElementById('taskDueDate').value;
+        const status = document.getElementById('taskStatus').value;
+        const taskId = document.getElementById('taskId').value;
+        
+        if (!title || !assignee || !dueDate) {
+          showToast('Por favor, completa los campos requeridos', 'error');
+          return;
+        }
+        
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          taskModal.style.display = 'none';
+          loadTasks();
+          showToast(taskId ? 'Tarea actualizada exitosamente' : 'Tarea creada exitosamente', 'success');
+        }, 1000);
+      });
+      
+      // Invite Member Button
+      inviteMemberBtn.addEventListener('click', function() {
+        inviteMemberModal.style.display = 'flex';
+      });
+      
+      // Invite Member Form Submit
+      inviteMemberForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const email = document.getElementById('inviteEmail').value;
+        const role = document.getElementById('inviteRole').value;
+        
+        if (!email) {
+          showToast('Por favor, ingresa un correo electrónico', 'error');
+          return;
+        }
+        
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          inviteMemberModal.style.display = 'none';
+          loadMembers();
+          showToast('Invitación enviada exitosamente', 'success');
+        }, 1000);
+      });
+      
+      // Profile Button
+      profileButton.addEventListener('click', function() {
+        if (profileDropdown.style.display === 'block') {
+          profileDropdown.style.display = 'none';
+        } else {
+          profileDropdown.style.display = 'block';
+        }
+      });
+      
+      // Profile Link
+      profileLink.addEventListener('click', function() {
+        profileDropdown.style.display = 'none';
+        
+        // Load profile data
+        document.getElementById('profileName').value = 'Usuario de Ejemplo';
+        document.getElementById('profileEmail').value = 'usuario@ejemplo.com';
+        document.getElementById('profilePhone').value = '';
+        
+        profileModal.style.display = 'flex';
+      });
+      
+      // Settings Link
+      settingsLink.addEventListener('click', function() {
+        profileDropdown.style.display = 'none';
+        settingsModal.style.display = 'flex';
+      });
+      
+      // Logout Button
+      logoutBtn.addEventListener('click', function() {
+        profileDropdown.style.display = 'none';
+        appScreen.style.display = 'none';
+        authScreen.style.display = 'flex';
+        document.getElementById('loginEmail').value = '';
+        document.getElementById('loginPassword').value = '';
+      });
+      
+      // Close Modal Buttons
+      document.querySelectorAll('.modal-close').forEach(button => {
+        button.addEventListener('click', function() {
+          this.closest('.fixed').style.display = 'none';
+        });
+      });
+      
+      // Close modal when clicking outside
+      document.querySelectorAll('.fixed').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+          if (e.target === this) {
+            this.style.display = 'none';
+          }
+        });
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', function(e) {
+        if (!profileButton.contains(e.target) && !profileDropdown.contains(e.target)) {
+          profileDropdown.style.display = 'none';
+        }
+      });
+      
+      // Calendar Navigation
+      document.getElementById('prevMonthBtn').addEventListener('click', function() {
+        showToast('Mes anterior cargado', 'info');
+        loadCalendar();
+      });
+      
+      document.getElementById('nextMonthBtn').addEventListener('click', function() {
+        showToast('Mes siguiente cargado', 'info');
+        loadCalendar();
+      });
+      
+      // Task Filter
+      document.getElementById('taskFilterSelect').addEventListener('change', function() {
+        loadTasks(this.value);
+      });
+      
+      // Chat Form Submit
+      document.getElementById('chatForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const message = document.getElementById('chatInput').value;
+        
+        if (!message.trim()) {
+          return;
+        }
+        
+        // Simulate sending message
+        const chatMessages = document.getElementById('chatMessages');
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('flex', 'flex-col', 'items-end');
+        messageElement.innerHTML = `
+          <div class="flex items-center mb-1">
+            <span class="text-xs text-gray-500">Ahora</span>
+            <span class="text-sm font-medium text-gray-700 ml-2">Tú</span>
+            <img class="h-6 w-6 rounded-full ml-2" src="https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png" alt="Avatar">
+          </div>
+          <div class="message-bubble sent py-2 px-4">
+            ${message}
+          </div>
+        `;
+        chatMessages.appendChild(messageElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        document.getElementById('chatInput').value = '';
+      });
+      
+      // Helper Functions
+      function showToast(message, type = 'success') {
+        toast.textContent = message;
+        toast.className = 'toast';
+        
+        if (type === 'success') {
+          toast.classList.add('bg-green-500', 'text-white');
+        } else if (type === 'error') {
+          toast.classList.add('bg-red-500', 'text-white');
+        } else if (type === 'info') {
+          toast.classList.add('bg-blue-500', 'text-white');
+        }
+        
+        toast.classList.add('show');
+        
+        setTimeout(function() {
+          toast.classList.remove('show');
+        }, 3000);
+      }
+      
+      function showLoading() {
+        loadingSpinner.style.display = 'flex';
+      }
+      
+      function hideLoading() {
+        loadingSpinner.style.display = 'none';
+      }
+      
+      // Data Loading Functions
+      function loadHouseholds() {
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          
+          const householdsList = document.getElementById('householdsList');
+          householdsList.innerHTML = '';
+          
+          // Placeholder data
+          const households = [
+            { id: 1, name: 'Apartamento Central', members: 4, tasks: 8, address: 'Calle Principal 123' },
+            { id: 2, name: 'Casa de Playa', members: 2, tasks: 3, address: 'Av. Costera 456' }
+          ];
+          
+          households.forEach(household => {
+            const householdCard = document.createElement('div');
+            householdCard.className = 'household-card bg-white shadow';
+            householdCard.innerHTML = `
+              <div class="p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">${household.name}</h3>
+                <p class="text-gray-600 mb-4">${household.address}</p>
+                <div class="flex justify-between text-sm text-gray-500">
+                  <span><i class="fas fa-users mr-1"></i> ${household.members} miembros</span>
+                  <span><i class="fas fa-tasks mr-1"></i> ${household.tasks} tareas</span>
+                </div>
+              </div>
+              <div class="bg-gray-50 px-6 py-4">
+                <button class="w-full py-2 px-4 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition duration-200 open-household" data-id="${household.id}">
+                  Ver detalles
+                </button>
+              </div>
+            `;
+            householdsList.appendChild(householdCard);
+          });
+          
+          // Add event listeners to household cards
+          document.querySelectorAll('.open-household').forEach(button => {
+            button.addEventListener('click', function() {
+              const householdId = this.getAttribute('data-id');
+              openHousehold(householdId);
+            });
+          });
+        }, 1000);
+      }
+      
+      function openHousehold(householdId) {
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          
+          // Set household name based on ID
+          householdDetailTitle.textContent = householdId == 1 ? 'Apartamento Central' : 'Casa de Playa';
+          
+          // Show household detail screen
+          householdsScreen.style.display = 'none';
+          householdDetailScreen.style.display = 'block';
+          
+          // Load tasks by default
+          loadTasks();
+        }, 500);
+      }
+      
+      function loadTasks(filter = 'all') {
+        showLoading();
+        
+        // Simulate API call
+        setTimeout(function() {
+          hideLoading();
+          
+          const tasksList = document.getElementById('tasksList');
+          tasksList.innerHTML = '';
+          
+          // Placeholder data
+          const tasks = [
+            { id: 1, title: 'Limpiar la cocina', assignee: { name: 'Ana', avatar: 'https://cdn.pixabay.com/photo/2021/11/19/14/17/woman-6809247_960_720.jpg' }, dueDate: '2025-06-15', status: 'pending' },
+            { id: 2, title: 'Sacar la basura', assignee: { name: 'Carlos', avatar: 'https://cdn.pixabay.com/photo/2016/11/18/19/07/happy-1836445_960_720.jpg' }, dueDate: '2025-06-14', status: 'in-progress' },
+            { id: 3, title: 'Comprar alimentos', assignee: { name: 'María', avatar: 'https://cdn.pixabay.com/photo/2018/04/27/03/50/woman-3353699_960_720.jpg' }, dueDate: '2025-06-16', status: 'completed' }
+          ];
+          
+          // Filter tasks if needed
+          const filteredTasks = filter === 'all' ? tasks : tasks.filter(task => task.status === filter);
+          
+          if (filteredTasks.length === 0) {
+            tasksList.innerHTML = '<div class="text-center py-8 text-gray-500">No hay tareas para mostrar</div>';
+            return;
+          }
+          
+          filteredTasks.forEach(task => {
+            const taskItem = document.createElement('div');
+            taskItem.className = `task-item ${task.status} bg-white shadow rounded-lg p-4`;
+            
+            // Format date
+            const dueDate = new Date(task.dueDate);
+            const formattedDate = dueDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            
+            taskItem.innerHTML = `
+              <div class="flex items-center">
+                <div class="mr-4">
+                  <input type="checkbox" class="h-5 w-5 text-indigo-600 border-gray-300 rounded task-checkbox" data-id="${task.id}" ${task.status === 'completed' ? 'checked' : ''}>
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-lg font-medium text-gray-800 ${task.status === 'completed' ? 'line-through' : ''}">${task.title}</h4>
+                  <div class="flex items-center mt-1">
+                    <img class="h-6 w-6 rounded-full mr-2" src="${task.assignee.avatar}" alt="${task.assignee.name}">
+                    <span class="text-sm text-gray-600 mr-4">${task.assignee.name}</span>
+                    <span class="text-sm text-gray-600"><i class="far fa-calendar-alt mr-1"></i> ${formattedDate}</span>
+                  </div>
+                </div>
+                <div>
+                  <button class="p-2 text-gray-500 hover:text-indigo-600 edit-task" data-id="${task.id}">
+                    <i class="fas fa-edit"></i>
+                  </button>
+                </div>
+              </div>
+            `;
+            tasksList.appendChild(taskItem);
+          });
+          
+          // Add event listeners to task checkboxes
+          document.querySelectorAll('.task-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+              const taskId = this.getAttribute('data-id');
+              const completed = this.checked;
+              
+              // Update task status
+              showLoading();
+              setTimeout(function() {
+                hideLoading();
+                loadTasks(filter);
+                showToast(completed ? 'Tarea completada' : 'Tarea marcada como pendiente', 'success');
+              }, 500);
+            });
+          });
+          
+          // Add event listeners to edit task buttons
+          document.querySelectorAll('.edit-task').forEach(button => {
+            button.addEventListener('click', function() {
+              const taskId = this.getAttribute('data-id');
+              editTask(taskId);
+            });
+          });
+        }, 1000);
+      }
+      
+      function editTask(taskId) {
+        showLoading();
+        
+        // Simulate API call to get task details
+        setTimeout(function() {
+          hideLoading();
+          
+          document.getElementById('taskModalTitle').textContent = 'Editar tarea';
+          document.getElementById('taskId').value = taskId;
+          
+          // Placeholder data for the task
+          const task = {
+            id: taskId,
+            title: taskId == 1 ? 'Limpiar la cocina' : (taskId == 2 ? 'Sacar la basura' : 'Comprar alimentos'),
+            description: 'Descripción de la tarea...',
+            assignee: taskId == 1 ? '1' : (taskId == 2 ? '2' : '3'),
+            dueDate: taskId == 1 ? '2025-06-15' : (taskId == 2 ? '2025-06-14' : '2025-06-16'),
+            status: taskId == 1 ? 'pending' : (taskId == 2 ? 'in-progress' : 'completed')
+          };
+          
+          document.getElementById('taskTitle').value = task.title;
+          document.getElementById('taskDescription').value = task.description;
+          document.getElementById('taskDueDate').value = task.dueDate;
+          document.getElementById('taskStatus').value = task.status;
+          
+          loadTaskAssignees(task.assignee);
+          taskModal.style.display = 'flex';
+        }, 500);
+      }
+      
+      function loadTaskAssignees(selectedAssignee = null) {
+        const assigneeSelect = document.getElementById('taskAssignee');
+        assigneeSelect.innerHTML = '';
+        
+        // Placeholder data
+        const members = [
+          { id: 1, name: 'Ana' },
+          { id: 2, name: 'Carlos' },
+          { id: 3, name: 'María' },
+          { id: 4, name: 'Tú' }
+        ];
+        
+        members.forEach(member => {
+          const option = document.createElement('option');
+          option.value = member.id;
+          option.textContent = member.name;
+          
+          if (selectedAssignee && member.id == selectedAssignee) {
+            option.selected = true;
+          }
+          
+          assigneeSelect.appendChild(option);
+        });
+      }
+      
+      function loadCalendar() {
+        // Set current month and year
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        document.getElementById('calendarMonthYear').textContent = `${monthNames[currentMonth]} ${currentYear}`;
+        
+        // Generate calendar days
+        const calendarDays = document.getElementById('calendarDays');
+        calendarDays.innerHTML = '';
+        
+        // Get first day of the month
+        const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+        const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+        
+        // Adjust first day (in Spain weeks start on Monday)
+        const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
+        
+        // Create empty cells for days before the 1st
+        for (let i = 0; i < adjustedFirstDay; i++) {
+          const emptyDay = document.createElement('div');
+          emptyDay.className = 'calendar-day empty bg-white p-2';
+          calendarDays.appendChild(emptyDay);
+        }
+        
+        // Create calendar days
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dayCell = document.createElement('div');
+          dayCell.className = 'calendar-day bg-white p-2 text-center';
+          
+          // Check if it's today
+          if (day === currentDate.getDate() && currentMonth === currentDate.getMonth() && currentYear === currentDate.getFullYear()) {
+            dayCell.classList.add('today');
+          }
+          
+          // Add task indicators for some days (placeholder)
+          if ([5, 10, 15, 20, 25].includes(day)) {
+            dayCell.classList.add('has-tasks');
+          }
+          
+          dayCell.innerHTML = `<span class="text-sm">${day}</span>`;
+          dayCell.setAttribute('data-date', `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`);
+          
+          // Add click event to show tasks for the day
+          dayCell.addEventListener('click', function() {
+            const selectedDate = this.getAttribute('data-date');
+            showDayTasks(selectedDate);
+          });
+          
+          calendarDays.appendChild(dayCell);
+        }
+      }
+      
+      function showDayTasks(date) {
+        const dayTasksContainer = document.getElementById('dayTasksContainer');
+        const dayTasksTitle = document.getElementById('dayTasksTitle');
+        const dayTasksList = document.getElementById('dayTasksList');
+        
+        // Format date for display
+        const formattedDate = new Date(date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+        dayTasksTitle.textContent = `Tareas para el ${formattedDate}`;
+        
+        // Show container
+        dayTasksContainer.style.display = 'block';
+        
+        // Simulate loading tasks for the selected day
+        dayTasksList.innerHTML = '<div class="text-center py-4"><div class="spinner mx-auto"></div></div>';
+        
+        setTimeout(function() {
+          dayTasksList.innerHTML = '';
+          
+          // Placeholder data - some days have tasks, others don't
+          let tasks = [];
+          const day = parseInt(date.split('-')[2]);
+          
+          if ([5, 10, 15, 20, 25].includes(day)) {
+            tasks = [
+              { id: 1, title: 'Limpiar la cocina', assignee: { name: 'Ana', avatar: 'https://cdn.pixabay.com/photo/2021/11/19/14/17/woman-6809247_960_720.jpg' }, status: 'pending' },
+              { id: 2, title: 'Sacar la basura', assignee: { name: 'Carlos', avatar: 'https://cdn.pixabay.com/photo/2016/11/18/19/07/happy-1836445_960_720.jpg' }, status: 'in-progress' }
+            ];
+          }
+          
+          if (tasks.length === 0) {
+            dayTasksList.innerHTML = '<div class="text-center py-4 text-gray-500">No hay tareas para este día</div>';
+            return;
+          }
+          
+          tasks.forEach(task => {
+            const taskItem = document.createElement('div');
+            taskItem.className = `task-item ${task.status} bg-white shadow rounded-lg p-4`;
+            
+            taskItem.innerHTML = `
+              <div class="flex items-center">
+                <div class="mr-4">
+                  <input type="checkbox" class="h-5 w-5 text-indigo-600 border-gray-300 rounded" ${task.status === 'completed' ? 'checked' : ''}>
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-lg font-medium text-gray-800 ${task.status === 'completed' ? 'line-through' : ''}">${task.title}</h4>
+                  <div class="flex items-center mt-1">
+                    <img class="h-6 w-6 rounded-full mr-2" src="${task.assignee.avatar}" alt="${task.assignee.name}">
+                    <span class="text-sm text-gray-600">${task.assignee.name}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+            dayTasksList.appendChild(taskItem);
+          });
+        }, 500);
+      }
+      
+      function loadChatMessages() {
+        const chatMessages = document.getElementById('chatMessages');
+        
+        // Clear existing messages
+        chatMessages.innerHTML = '<div class="text-center py-4"><div class="spinner mx-auto"></div></div>';
+        
+        // Simulate loading messages
+        setTimeout(function() {
+          chatMessages.innerHTML = '';
+          
+          // Placeholder data
+          const messages = [
+            { id: 1, sender: { name: 'Ana', avatar: 'https://cdn.pixabay.com/photo/2021/11/19/14/17/woman-6809247_960_720.jpg' }, text: 'Hola a todos! ¿Quién va a hacer la compra esta semana?', timestamp: '10:15' },
+            { id: 2, sender: { name: 'Carlos', avatar: 'https://cdn.pixabay.com/photo/2016/11/18/19/07/happy-1836445_960_720.jpg' }, text: 'Yo puedo ir el jueves después del trabajo', timestamp: '10:18' },
+            { id: 3, sender: { name: 'María', avatar: 'https://cdn.pixabay.com/photo/2018/04/27/03/50/woman-3353699_960_720.jpg' }, text: 'Perfecto! Yo me encargo de limpiar el baño entonces', timestamp: '10:20' },
+            { id: 4, sender: { name: 'Tú', avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png', isCurrentUser: true }, text: 'Yo me encargo de la cocina, no hay problema', timestamp: '10:25' }
+          ];
+          
+          messages.forEach(message => {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('flex', 'flex-col');
+            
+            if (message.sender.isCurrentUser) {
+              messageElement.classList.add('items-end');
+              messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                  <span class="text-xs text-gray-500">${message.timestamp}</span>
+                  <span class="text-sm font-medium text-gray-700 ml-2">${message.sender.name}</span>
+                  <img class="h-6 w-6 rounded-full ml-2" src="${message.sender.avatar}" alt="Avatar">
+                </div>
+                <div class="message-bubble sent py-2 px-4">
+                  ${message.text}
+                </div>
+              `;
+            } else {
+              messageElement.classList.add('items-start');
+              messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                  <img class="h-6 w-6 rounded-full mr-2" src="${message.sender.avatar}" alt="Avatar">
+                  <span class="text-sm font-medium text-gray-700 mr-2">${message.sender.name}</span>
+                  <span class="text-xs text-gray-500">${message.timestamp}</span>
+                </div>
+                <div class="message-bubble received py-2 px-4">
+                  ${message.text}
+                </div>
+              `;
+            }
+            
+            chatMessages.appendChild(messageElement);
+          });
+          
+          // Scroll to bottom
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }, 1000);
+      }
+      
+      function loadMembers() {
+        const membersList = document.getElementById('membersList');
+        const pendingInvitesList = document.getElementById('pendingInvitesList');
+        
+        // Clear existing members
+        membersList.innerHTML = '<div class="text-center py-4"><div class="spinner mx-auto"></div></div>';
+        pendingInvitesList.innerHTML = '';
+        
+        // Simulate loading members
+        setTimeout(function() {
+          membersList.innerHTML = '';
+          
+          // Placeholder data
+          const members = [
+            { id: 1, name: 'Tú', avatar: 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png', role: 'admin', isCurrentUser: true },
+            { id: 2, name: 'Ana', avatar: 'https://cdn.pixabay.com/photo/2021/11/19/14/17/woman-6809247_960_720.jpg', role: 'member' },
+            { id: 3, name: 'Carlos', avatar: 'https://cdn.pixabay.com/photo/2016/11/18/19/07/happy-1836445_960_720.jpg', role: 'member' },
+            { id: 4, name: 'María', avatar: 'https://cdn.pixabay.com/photo/2018/04/27/03/50/woman-3353699_960_720.jpg', role: 'member' }
+          ];
+          
+          members.forEach(member => {
+            const memberItem = document.createElement('li');
+            memberItem.className = 'p-4 flex items-center justify-between';
+            
+            memberItem.innerHTML = `
+              <div class="flex items-center">
+                <img class="h-10 w-10 rounded-full mr-3" src="${member.avatar}" alt="${member.name}">
+                <div>
+                  <p class="text-sm font-medium text-gray-900">${member.name} ${member.isCurrentUser ? '(Tú)' : ''}</p>
+                  <p class="text-xs text-gray-500">${member.role === 'admin' ? 'Administrador' : 'Miembro'}</p>
+                </div>
+              </div>
+              ${!member.isCurrentUser ? `
+                <div class="flex space-x-2">
+                  <button class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-envelope"></i>
+                  </button>
+                  <button class="text-gray-400 hover:text-red-600">
+                    <i class="fas fa-user-minus"></i>
+                  </button>
+                </div>
+              ` : ''}
+            `;
+            
+            membersList.appendChild(memberItem);
+          });
+          
+          // Placeholder data for pending invites
+          const pendingInvites = [
+            { id: 1, email: 'pedro@ejemplo.com', role: 'member', sentAt: '2025-06-10' }
+          ];
+          
+          if (pendingInvites.length === 0) {
+            pendingInvitesList.innerHTML = '<div class="text-center py-4 text-gray-500">No hay invitaciones pendientes</div>';
+          } else {
+            pendingInvites.forEach(invite => {
+              const inviteItem = document.createElement('div');
+              inviteItem.className = 'bg-white shadow rounded-lg p-4';
+              
+              // Format date
+              const sentDate = new Date(invite.sentAt);
+              const formattedDate = sentDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+              
+              inviteItem.innerHTML = `
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-medium text-gray-900">${invite.email}</p>
+                    <p class="text-xs text-gray-500">Rol: ${invite.role === 'admin' ? 'Administrador' : 'Miembro'} • Enviada el ${formattedDate}</p>
+                  </div>
+                  <div class="flex space-x-2">
+                    <button class="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-md text-sm hover:bg-indigo-200">
+                      Reenviar
+                    </button>
+                    <button class="px-3 py-1 bg-red-100 text-red-700 rounded-md text-sm hover:bg-red-200">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              `;
+              
+              pendingInvitesList.appendChild(inviteItem);
+            });
+          }
+        }, 1000);
+      }
+      
+      // Request notification permission on first visit
+      if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        setTimeout(function() {
+          Notification.requestPermission().then(function(permission) {
+            if (permission === "granted") {
+              showToast('Notificaciones activadas', 'info');
+            }
+          });
+        }, 3000);
+      }
+    });
+  </script>
+</body>
+</html>
